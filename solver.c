@@ -77,11 +77,21 @@ Board make_solution_board(const char* solution) {
     return board;
 }
 
+
+void mark_false(Board* board, int row, int col, uint16_t val);
+void mark_true(Board* board, int row, int col, uint16_t val);
+
 void mark_false(Board* board, int row, int col, uint16_t val) {
     int idx = row * 9 + col;
     uint16_t mask = 1 << val;
-    board->counts[idx] -= (board->flags[idx] & mask) ? 1 : 0;
+    int is_set = board->flags[idx] & mask;
+    board->counts[idx] -=  is_set ? 1 : 0;
     board->flags[idx] &= ~mask;
+
+    if (board->counts[idx] == 1 && is_set) {
+        uint16_t new_val = __tzcnt_u32(board->flags[idx]);
+        mark_true(board, row, col, new_val);
+    }
 }
 
 void mark_true(Board* board, int row, int col, uint16_t val) {
@@ -253,8 +263,8 @@ Solution solve_one(const char* problem) {
     free(stack.data);
 
     //printf("%s\n", solution.is_solved ? "Solved!" : "Unsolved!");
-    print_solution(solution);
-    printf("%s\n", TEST_SOLUTION);
+    //print_solution(solution);
+    //printf("%s\n", TEST_SOLUTION);
 
     return solution;
 }
@@ -271,7 +281,7 @@ int main() {
         }
     }
     if (accumulator) {
-        printf("Solved!");
+        printf("Solved!\n");
     }
     
     /*
