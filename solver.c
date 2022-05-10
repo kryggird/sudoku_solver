@@ -41,7 +41,7 @@ typedef struct Stack {
 } Stack;
 
 int exactly_one(int val) {
-    return (val != 0) && !(val & (val - 1));
+    return (val != 0) & !(val & (val - 1));
 }
 
 Stack alloc_stack(size_t capacity) {
