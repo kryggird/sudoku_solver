@@ -21,7 +21,6 @@ const char* TEST_SOLUTION = "864371259325849761971265843436192587198657432257483
 
 typedef struct Board {
     uint16_t flags[81];    
-    uint16_t counts[81];
 } Board;
 
 typedef struct Solution {
@@ -40,6 +39,10 @@ typedef struct Stack {
     size_t capacity;
     size_t size;
 } Stack;
+
+int exactly_one(int val) {
+    return (val != 0) && !(val & (val - 1));
+}
 
 Stack alloc_stack(size_t capacity) {
     State* data_ptr = calloc(capacity, sizeof(State));
@@ -74,7 +77,6 @@ Board make_empty_board() {
     Board board;
     for (int idx = 0; idx < 81; ++idx) {
         board.flags[idx] = 0b111111111;
-        board.counts[idx] = 9;
     }
     return board;
 }
@@ -94,7 +96,6 @@ Board make_solution_board(const char* solution) {
     for (int idx = 0; idx < 81; ++idx) {
         int val = solution[idx] - '1';
         board.flags[idx] = 1 << val;
-        board.counts[idx] = 1;
     }
     return board;
 }
@@ -103,13 +104,19 @@ Board make_solution_board(const char* solution) {
 void mark_false(Board* board, int idx, uint16_t val);
 void mark_true(Board* board, int idx, uint16_t val);
 
+int mark_false_no_recurse(Board* board, int idx, uint16_t mask) {
+    int is_set = board->flags[idx] & mask;
+    board->flags[idx] &= ~mask;
+
+    return (is_set > 0) & exactly_one(board->flags[idx]);
+}
+
 void mark_false(Board* board, int idx, uint16_t val) {
     uint16_t mask = 1 << val;
     int is_set = board->flags[idx] & mask;
-    board->counts[idx] -=  is_set ? 1 : 0;
     board->flags[idx] &= ~mask;
 
-    if (board->counts[idx] == 1 && is_set) {
+    if (exactly_one(board->flags[idx]) && is_set) {
         uint16_t new_val = __tzcnt_u32(board->flags[idx]);
         mark_true(board, idx, new_val);
     }
@@ -118,7 +125,6 @@ void mark_false(Board* board, int idx, uint16_t val) {
 void mark_true(Board* board, int idx, uint16_t val) {
     uint16_t mask = 1 << val;
     board->flags[idx] &= mask;
-    board->counts[idx] = (board->flags[idx] == 0) ? 0 : 1;
 
     for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
         mark_false(board, INDICES[idx][shift_idx], val);
@@ -128,7 +134,7 @@ void mark_true(Board* board, int idx, uint16_t val) {
 int verify(Board* board) {
     int accumulator = 1;
     for (int idx = 0; idx < 81; ++idx) {
-        accumulator &= (board->counts[idx] != 0);
+        accumulator &= (board->flags[idx] != 0);
     }
     return accumulator;
 }
@@ -146,7 +152,7 @@ void debug_verify(Board* board) {
         for (int col_idx = 0; col_idx < 9; ++col_idx) {
             int idx = row_idx * 9 + col_idx;
             int val = __tzcnt_u32(board->flags[idx]);
-            if (board->counts[idx] == 1) {
+            if (exactly_one(board->flags[idx])) {
                 seen[val]++;
                 if (seen[val] >= 2) {
                     exit(3);
@@ -161,7 +167,7 @@ void debug_verify(Board* board) {
         for (int row_idx = 0; row_idx < 9; ++row_idx) {
             int idx = row_idx * 9 + col_idx;
             int val = __tzcnt_u32(board->flags[idx]);
-            if (board->counts[idx] == 1) {
+            if (exactly_one(board->flags[idx])) {
                 seen[val]++;
                 if (seen[val] >= 2) {
                     exit(3);
@@ -177,7 +183,7 @@ void debug_verify(Board* board) {
         for (int inner_idx = 0; inner_idx < 9; ++inner_idx) {
             int idx = box_start + box_shift[inner_idx];
             int val = __tzcnt_u32(board->flags[idx]);
-            if (board->counts[idx] == 1) {
+            if (exactly_one(board->flags[idx])) {
                 seen[val]++;
                 if (seen[val] >= 2) {
                     exit(3);
@@ -190,7 +196,7 @@ void debug_verify(Board* board) {
 int is_solution(Board* board) {
     int ret = 1;
     for (int idx = 0; idx < 81; ++idx) {
-        ret &= board->counts[idx] == 1;
+        ret &= exactly_one(board->flags[idx]);
     }
     return ret;
 }
@@ -203,7 +209,7 @@ void print_board(Board board) {
             int idx = row * 9 + col;
             int val = __tzcnt_u32(board.flags[idx]);
 
-            if (board.counts[idx] == 1 && val >= 0 && val < 9) {
+            if (exactly_one(board.flags[idx]) && val >= 0 && val < 9) {
                 printf("%c", digits[val]);
             } else {
                 printf(".");
@@ -252,7 +258,9 @@ Solution solve_from_candidates(Stack* stack_ptr) {
         for(int count = state.idx; count < 81; ++count) {
             int argmin = count;
             for (int swap_idx = count; swap_idx < 81; ++swap_idx) {
-                argmin = (state.current.counts[state.idxs[swap_idx]] < state.current.counts[state.idxs[argmin]]) ? swap_idx : argmin;
+                int min = _mm_popcnt_u32(state.current.flags[state.idxs[argmin]]);
+                int candidate = _mm_popcnt_u32(state.current.flags[state.idxs[swap_idx]]);
+                argmin = (candidate < min) ? swap_idx : argmin;
             }
             // Swap values
             int8_t tmp = state.idxs[count];
@@ -268,7 +276,7 @@ Solution solve_from_candidates(Stack* stack_ptr) {
             if (!verify(&state.current)) {
                 //printf("Verify failed!\n");
                 break;
-            } else if (state.current.counts[idx] == 1) {
+            } else if (exactly_one(state.current.flags[idx])) {
                 //printf("Nothing to do here!\n");
                 if (is_solution(&state.current)) {
                     solution.solution = state.current;
