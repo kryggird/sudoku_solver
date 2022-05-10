@@ -29,6 +29,7 @@ typedef struct Solution {
 
 typedef struct State {
     Board current;
+    int8_t idxs[81];
     int idx;
 } State;
 
@@ -74,6 +75,16 @@ Board make_empty_board() {
         board.counts[idx] = 9;
     }
     return board;
+}
+
+State make_empty_state() {
+    State state;
+    state.current = make_empty_board();
+    for (int8_t idx = 0; idx < 81; ++idx) {
+        state.idxs[idx] = idx;
+    }
+    state.idx = 0;
+    return state;
 }
 
 Board make_solution_board(const char* solution) {
@@ -255,11 +266,21 @@ Solution solve_from_candidates(Stack* stack_ptr) {
         State state = stack_pop(stack_ptr);
         //printf("Stack popped!\n");
 
+        for(int count = state.idx; count < 81; ++count) {
+            int argmin = count;
+            for (int swap_idx = count; swap_idx < 81; ++swap_idx) {
+                argmin = (state.current.counts[state.idxs[swap_idx]] < state.current.counts[state.idxs[argmin]]) ? swap_idx : argmin;
+            }
+            // Swap values
+            int8_t tmp = state.idxs[count];
+            state.idxs[count] = state.idxs[argmin];
+            state.idxs[argmin] = tmp;
 
-        for(int idx = state.idx; idx < 81; ++idx) {
             //print_flags(&state.current);
 
             //debug_verify(&state.current);
+
+            int idx = state.idxs[count];
 
             if (!verify(&state.current)) {
                 //printf("Verify failed!\n");
@@ -286,13 +307,22 @@ Solution solve_from_candidates(Stack* stack_ptr) {
                 mark_true(&state.current, row, col, val);
             }
         }
+
+        if (is_solution(&state.current)) {
+            solution.solution = state.current;
+            solution.is_solved = 1;
+            return solution;
+        } else {
+            continue;
+        }
     }
 
     return solution;
 }
 
 Solution solve_one(const char* problem) {
-    State state = (State) {make_empty_board(), 0};
+    State state = make_empty_state();
+
     for (int idx = 0; idx < 81; ++idx) {
         if ((problem[idx] != '0') && (problem[idx] != '.')) {
             int col = idx % 9;
