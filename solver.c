@@ -1,3 +1,7 @@
+#include <unistd.h> // read
+#include <sys/stat.h> // fstat
+#include <fcntl.h> // open, close
+
 #include <stddef.h> // size_t
 #include <stdint.h> // uint*_t
 #include <stdio.h> // printf
@@ -204,6 +208,21 @@ void print_solution(Solution solution) {
     printf("\n");
 }
 
+void print_flags(const Board* board) {
+    for (int row = 0; row < 9; ++row) {
+        for(int col = 0; col < 9; ++col) {
+            int idx = row * 9 + col;
+            for (int val = 0; val < 9; ++val) {
+                char c = ((board->flags[idx] >> val) & 1) ? '.' : ('0' + val);
+                printf("%c", c);
+            }
+            printf(" ");
+        }
+        printf("\n");
+    }
+    printf("\n");
+}
+
 Solution solve_from_candidates(Stack* stack_ptr) {
     Solution solution = (Solution) {make_empty_board(), 0};
 
@@ -212,7 +231,9 @@ Solution solve_from_candidates(Stack* stack_ptr) {
         //printf("Stack popped!\n");
 
         for(int idx = state.idx; idx < 81; ++idx) {
-            debug_verify(&state.current);
+            //print_flags(&state.current);
+
+            //debug_verify(&state.current);
 
             if (!verify(&state.current)) {
                 //printf("Verify failed!\n");
@@ -247,7 +268,7 @@ Solution solve_from_candidates(Stack* stack_ptr) {
 Solution solve_one(const char* problem) {
     State state = (State) {make_empty_board(), 0};
     for (int idx = 0; idx < 81; ++idx) {
-        if (problem[idx] != '0') {
+        if ((problem[idx] != '0') && (problem[idx] != '.')) {
             int col = idx % 9;
             int row = idx / 9;
             int val = problem[idx] - '1';
@@ -269,7 +290,55 @@ Solution solve_one(const char* problem) {
     return solution;
 }
 
+void solve_from_csv(const char* filename, int has_solution) {
+    struct stat statbuf;
+    int fd = open(filename, O_RDONLY);
+    if (fd == 0) { exit(5); }
+    fstat(fd, &statbuf);
+
+    int64_t buffer_size = statbuf.st_size;
+    char* buffer = (char*) calloc(sizeof(char), buffer_size);
+    read(fd, buffer, buffer_size);
+    close(fd);
+
+    char* current = buffer;
+    int64_t step = has_solution
+                 ? 81 + 1 /* comma */ + 81 + 1 /* newline */
+                 : 81 + 1;
+    while (buffer_size > step) {
+        const char* problem_ptr = current;
+
+        current += step;
+        buffer_size -= step;
+
+        Solution candidate = solve_one(problem_ptr);
+        if (has_solution) {
+            const char* solution_ptr = current + 81 + 1 /* comma */;
+
+            Board solution = make_solution_board(solution_ptr);
+
+            int accumulator = 1;
+            for (int idx = 0; idx < 81; ++idx) {
+                accumulator &= candidate.solution.flags[idx] == solution.flags[idx];
+            }
+            if (!accumulator) {
+                printf("Error!\n");
+                exit(4);
+            }
+        } else {
+            if(!candidate.is_solved) {
+                printf("Error!\n");
+                exit(4);
+            }
+        }
+    }
+}
+
 int main() {
+    //solve_from_csv("sudoku.csv", 1 /* has_solution */);
+    solve_from_csv("top1465.csv", 0 /* has_solution */);
+
+    /*
     Solution candidate = solve_one(TEST_PROBLEM);
     Board solution = make_solution_board(TEST_SOLUTION);
 
@@ -283,6 +352,7 @@ int main() {
     if (accumulator) {
         printf("Solved!\n");
     }
+    */
     
     /*
     Board board = make_empty_board();
