@@ -10,6 +10,8 @@
 
 #include <x86intrin.h> // tzcnt
 
+#include "tables.c"
+
 #ifndef DEBUG_VERIFY
     #define DEBUG_VERIFY 0
 #endif
@@ -98,11 +100,10 @@ Board make_solution_board(const char* solution) {
 }
 
 
-void mark_false(Board* board, int row, int col, uint16_t val);
-void mark_true(Board* board, int row, int col, uint16_t val);
+void mark_false(Board* board, int idx, uint16_t val);
+void mark_true(Board* board, int idx, uint16_t val);
 
-void mark_false(Board* board, int row, int col, uint16_t val) {
-    int idx = row * 9 + col;
+void mark_false(Board* board, int idx, uint16_t val) {
     uint16_t mask = 1 << val;
     int is_set = board->flags[idx] & mask;
     board->counts[idx] -=  is_set ? 1 : 0;
@@ -110,34 +111,17 @@ void mark_false(Board* board, int row, int col, uint16_t val) {
 
     if (board->counts[idx] == 1 && is_set) {
         uint16_t new_val = __tzcnt_u32(board->flags[idx]);
-        mark_true(board, row, col, new_val);
+        mark_true(board, idx, new_val);
     }
 }
 
-void mark_true(Board* board, int row, int col, uint16_t val) {
-    int idx = row * 9 + col;
+void mark_true(Board* board, int idx, uint16_t val) {
     uint16_t mask = 1 << val;
     board->flags[idx] &= mask;
     board->counts[idx] = (board->flags[idx] == 0) ? 0 : 1;
 
-    for (int shift_idx = 0; shift_idx < 9; ++shift_idx) {
-        if (shift_idx != col) {
-            mark_false(board, row, shift_idx, val);
-        }
-        if (shift_idx != row) {
-            mark_false(board, shift_idx, col, val);
-        }
-    }
-
-    int square_row = 3 * (row / 3);
-    int square_col = 3 * (col / 3);
-    for (int col_idx = 0; col_idx < 3; ++col_idx) {
-        for (int row_idx = 0; row_idx < 3; ++row_idx) {
-            int flat_idx = (square_row + row_idx) * 9 + (square_col + col_idx);
-            if (flat_idx != idx) {
-                mark_false(board, square_row + row_idx, square_col + col_idx, val);
-            }
-        }
+    for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
+        mark_false(board, INDICES[idx][shift_idx], val);
     }
 }
 
@@ -296,14 +280,12 @@ Solution solve_from_candidates(Stack* stack_ptr) {
             } else {
                 //printf("Adding new branch!\n");
                 State next = state;
-                int col = idx % 9;
-                int row = idx / 9;
                 int val = __tzcnt_u32(state.current.flags[idx]);
 
-                mark_false(&next.current, row, col, val);
+                mark_false(&next.current, idx, val);
                 stack_push(stack_ptr, next);
 
-                mark_true(&state.current, row, col, val);
+                mark_true(&state.current, idx, val);
             }
         }
 
@@ -324,11 +306,9 @@ Solution solve_one(const char* problem) {
 
     for (int idx = 0; idx < 81; ++idx) {
         if ((problem[idx] != '0') && (problem[idx] != '.')) {
-            int col = idx % 9;
-            int row = idx / 9;
             int val = problem[idx] - '1';
             
-            mark_true(&state.current, row, col, val);
+            mark_true(&state.current, idx, val);
         }
     }
 
