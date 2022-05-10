@@ -142,12 +142,11 @@ void mark_true(Board* board, int row, int col, uint16_t val) {
 }
 
 int verify(Board* board) {
+    int accumulator = 1;
     for (int idx = 0; idx < 81; ++idx) {
-        if (board->counts[idx] == 0) {
-            return 0;
-        }
+        accumulator &= (board->counts[idx] != 0);
     }
-    return 1;
+    return accumulator;
 }
 
 void debug_verify(Board* board) {
