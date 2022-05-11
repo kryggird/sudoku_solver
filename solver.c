@@ -44,6 +44,10 @@ int exactly_one(int val) {
     return (val != 0) & !(val & (val - 1));
 }
 
+uint16_t val_to_mask(int val) {
+    return 1u << val;
+}
+
 Stack alloc_stack(size_t capacity) {
     State* data_ptr = calloc(capacity, sizeof(State));
     if (data_ptr == NULL) { 
@@ -104,6 +108,8 @@ Board make_solution_board(const char* solution) {
 void mark_false(Board* board, int idx, uint16_t val);
 void mark_true(Board* board, int idx, uint16_t val);
 
+// mask is the *true* mask. Aka `1 << val`.
+// mask is the *true* mask. Aka `1 << val`.
 int mark_false_no_recurse(Board* board, int idx, uint16_t mask) {
     int is_set = board->flags[idx] & mask;
     board->flags[idx] &= ~mask;
@@ -111,23 +117,37 @@ int mark_false_no_recurse(Board* board, int idx, uint16_t mask) {
     return (is_set > 0) & exactly_one(board->flags[idx]);
 }
 
-void mark_false(Board* board, int idx, uint16_t val) {
-    uint16_t mask = 1 << val;
+// mask is the *true* mask. Aka `1 << val`.
+void mark_false(Board* board, int idx, uint16_t mask) {
+    //uint16_t mask = 1 << val;
     int is_set = board->flags[idx] & mask;
     board->flags[idx] &= ~mask;
 
     if (exactly_one(board->flags[idx]) && is_set) {
-        uint16_t new_val = __tzcnt_u32(board->flags[idx]);
-        mark_true(board, idx, new_val);
+        //uint16_t new_val = __tzcnt_u32(board->flags[idx]);
+        mark_true(board, idx, board->flags[idx]);
     }
 }
 
-void mark_true(Board* board, int idx, uint16_t val) {
-    uint16_t mask = 1 << val;
+void mark_true(Board* board, int idx, uint16_t mask) {
+    //uint16_t mask = 1 << val;
     board->flags[idx] &= mask;
 
+    /*for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
+        mark_false(board, INDICES[idx][shift_idx], mask);
+    }*/
+
+    uint32_t recurse_set = 0;
     for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
-        mark_false(board, INDICES[idx][shift_idx], val);
+        int bit = mark_false_no_recurse(board, INDICES[idx][shift_idx], mask);
+        recurse_set |= bit << shift_idx;
+    }
+
+    while (recurse_set) {
+        int shift_idx = __tzcnt_u32(recurse_set);
+        int flag_idx = INDICES[idx][shift_idx];
+        recurse_set ^= 1 << shift_idx;
+        mark_true(board, flag_idx, board->flags[flag_idx]);
     }
 }
 
@@ -290,10 +310,10 @@ Solution solve_from_candidates(Stack* stack_ptr) {
                 State next = state;
                 int val = __tzcnt_u32(state.current.flags[idx]);
 
-                mark_false(&next.current, idx, val);
+                mark_false(&next.current, idx, val_to_mask(val));
                 stack_push(stack_ptr, next);
 
-                mark_true(&state.current, idx, val);
+                mark_true(&state.current, idx, val_to_mask(val));
             }
         }
 
@@ -316,7 +336,7 @@ Solution solve_one(const char* problem) {
         if ((problem[idx] != '0') && (problem[idx] != '.')) {
             int val = problem[idx] - '1';
             
-            mark_true(&state.current, idx, val);
+            mark_true(&state.current, idx, val_to_mask(val));
         }
     }
 
