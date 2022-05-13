@@ -9,6 +9,10 @@
 
 #include <x86intrin.h> // tzcnt
 
+#ifndef DEBUG_VERIFY
+    #define DEBUG_VERIFY 0
+#endif
+
 const char* TEST_PROBLEM = "004300209005009001070060043006002087190007400050083000600000105003508690042910300";
 const char* TEST_SOLUTION = "864371259325849761971265843436192587198657432257483916689734125713528694542916378";
 
@@ -137,6 +141,10 @@ int verify(Board* board) {
 void debug_verify(Board* board) {
     if (!verify(board)) { return; }
 
+    int box_col[9] = {0, 3, 6, 0, 3, 6, 0, 3, 6};
+    int box_row[9] = {0, 0, 0, 3, 3, 3, 6, 6, 6};
+    int box_shift[9] = {0, 1, 2, 9, 10, 11, 18, 19, 20};
+
     for (int row_idx = 0; row_idx < 9; ++row_idx) {
         uint8_t seen[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -157,6 +165,22 @@ void debug_verify(Board* board) {
 
         for (int row_idx = 0; row_idx < 9; ++row_idx) {
             int idx = row_idx * 9 + col_idx;
+            int val = __tzcnt_u32(board->flags[idx]);
+            if (board->counts[idx] == 1) {
+                seen[val]++;
+                if (seen[val] >= 2) {
+                    exit(3);
+                }
+            }
+        }
+    }
+
+    for (int box_idx = 0; box_idx < 9; ++box_idx) {
+        uint8_t seen[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+        int box_start = box_row[box_idx] * 9 + box_col[box_idx];
+
+        for (int inner_idx = 0; inner_idx < 9; ++inner_idx) {
+            int idx = box_start + box_shift[inner_idx];
             int val = __tzcnt_u32(board->flags[idx]);
             if (board->counts[idx] == 1) {
                 seen[val]++;
@@ -229,6 +253,7 @@ Solution solve_from_candidates(Stack* stack_ptr) {
     while(stack_nonempty(stack_ptr)) {
         State state = stack_pop(stack_ptr);
         //printf("Stack popped!\n");
+
 
         for(int idx = state.idx; idx < 81; ++idx) {
             //print_flags(&state.current);
@@ -303,8 +328,8 @@ void solve_from_csv(const char* filename, int has_solution) {
 
     char* current = buffer;
     int64_t step = has_solution
-                 ? 81 + 1 /* comma */ + 81 + 1 /* newline */
-                 : 81 + 1;
+                 ? (81 + 1 /* comma */ + 81 + 1 /* newline */)
+                 : (81 + 1);
     while (buffer_size > step) {
         const char* problem_ptr = current;
 
@@ -312,14 +337,19 @@ void solve_from_csv(const char* filename, int has_solution) {
         buffer_size -= step;
 
         Solution candidate = solve_one(problem_ptr);
-        if (has_solution) {
-            const char* solution_ptr = current + 81 + 1 /* comma */;
 
+        if (DEBUG_VERIFY >= 1) {
+            debug_verify(&candidate.solution);
+        }
+
+        if (has_solution) {
+            const char* solution_ptr = problem_ptr + 81 + 1 /* comma */;
             Board solution = make_solution_board(solution_ptr);
 
             int accumulator = 1;
             for (int idx = 0; idx < 81; ++idx) {
-                accumulator &= candidate.solution.flags[idx] == solution.flags[idx];
+                accumulator = accumulator 
+                            && (candidate.solution.flags[idx] == solution.flags[idx]);
             }
             if (!accumulator) {
                 printf("Error!\n");
@@ -335,7 +365,7 @@ void solve_from_csv(const char* filename, int has_solution) {
 }
 
 int main() {
-    //solve_from_csv("sudoku.csv", 1 /* has_solution */);
+    solve_from_csv("sudoku.csv", 1 /* has_solution */);
     solve_from_csv("top1465.csv", 0 /* has_solution */);
 
     /*
