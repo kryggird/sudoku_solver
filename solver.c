@@ -277,10 +277,11 @@ Solution solve_from_candidates(Stack* stack_ptr) {
 
         for(int count = state.idx; count < 81; ++count) {
             int argmin = count;
+            int min = _mm_popcnt_u32(state.current.flags[state.idxs[argmin]]);
             for (int swap_idx = count; swap_idx < 81; ++swap_idx) {
-                int min = _mm_popcnt_u32(state.current.flags[state.idxs[argmin]]);
                 int candidate = _mm_popcnt_u32(state.current.flags[state.idxs[swap_idx]]);
                 argmin = (candidate < min) ? swap_idx : argmin;
+                min = (candidate < min) ? candidate : min;
             }
             // Swap values
             int8_t tmp = state.idxs[count];
