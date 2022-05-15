@@ -327,14 +327,28 @@ void solve_from_csv(const char* filename, int has_solution) {
     close(fd);
 
     char* current = buffer;
+    int64_t remaining_size = buffer_size;
     int64_t step = has_solution
                  ? (81 + 1 /* comma */ + 81 + 1 /* newline */)
                  : (81 + 1);
-    while (buffer_size > step) {
+
+    // Skip lines which are comments
+    while ((remaining_size > 0) && *current == '#') {
+        ++current;
+        --remaining_size;
+        while (remaining_size && *current != '\n') {
+            ++current;
+            --remaining_size;
+        }
+        ++current;
+        --remaining_size;
+    }
+
+    while (remaining_size > step) {
         const char* problem_ptr = current;
 
         current += step;
-        buffer_size -= step;
+        remaining_size -= step;
 
         Solution candidate = solve_one(problem_ptr);
 
@@ -362,11 +376,15 @@ void solve_from_csv(const char* filename, int has_solution) {
             }
         }
     }
+
+    free(buffer);
 }
 
 int main() {
     solve_from_csv("sudoku.csv", 1 /* has_solution */);
     solve_from_csv("top1465.csv", 0 /* has_solution */);
+    solve_from_csv("data/puzzles0_kaggle", 0 /* has_solution */);
+    //solve_from_csv("data/puzzles5_forum_hardest_1905_11+", 0 /* has_solution */);
 
     /*
     Solution candidate = solve_one(TEST_PROBLEM);
