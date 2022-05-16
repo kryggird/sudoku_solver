@@ -8,7 +8,7 @@
 #include <stdlib.h> // calloc
 #include <string.h> // strcmp
 
-#include <x86intrin.h> // tzcnt
+#include <x86intrin.h> // tzcnt, popcnt
 
 #include "tables.c"
 
@@ -49,7 +49,12 @@ uint16_t val_to_mask(int val) {
 }
 
 Stack alloc_stack(size_t capacity) {
-    State* data_ptr = calloc(capacity, sizeof(State));
+    size_t raw_size = capacity * sizeof(State);
+    size_t alignment = sizeof(__m256i) * 8;
+    size_t rounded_size = (raw_size / alignment + 1) * alignment;
+
+    State* data_ptr = aligned_alloc(alignment, rounded_size);
+
     if (data_ptr == NULL) { 
         exit(1); 
     }
