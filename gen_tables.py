@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from math import ceil
 
 def gen_idxs(idx):
     row = (idx // 9)
@@ -17,6 +18,20 @@ def gen_idxs(idx):
 
     return row_idxs + col_idxs + [i for i in square_idxs if i not in row_idxs + col_idxs and i != idx]
 
+def gen_mask(idx, count, alignment=None):
+    if alignment is not None:
+        aligned_count = int(ceil(count / alignment)) * alignment
+    else:
+        aligned_count = count
+    idxs = gen_idxs(idx)
+
+    elems = [0xFFFF if (i in idxs) else 0 for i in range(aligned_count)]
+    return elems
+
+
+def gen_headers():
+    return f"#include <stdint.h>"
+
 def gen_code():
     count = 8 + 8 + 4
 
@@ -30,9 +45,30 @@ def gen_code():
         lines.append("    " + row)
 
     concat = ",\n".join(lines)
-    total = f"#include <stdint.h>\n\nconst int COUNT = {count};\nconst int8_t INDICES[81][{count}] = {{\n{concat}\n}};"
+    total = f"const int COUNT = {count};\nconst int8_t INDICES[81][{count}] = {{\n{concat}\n}};"
     return total
 
+def gen_mask_code():
+    mm_count = int(ceil((81 / 16)))
+    aligned_count = mm_count * 16
+
+    lines = []
+    for num in range(81):
+        masks = gen_mask(num, aligned_count, 16)
+        as_str = map("{:3d}".format, masks)
+        inner = ", ".join(as_str)
+        row = f"{{ {inner} }}"
+        lines.append("    " + row)
+
+    concat = ",\n".join(lines)
+    total = f"const int MM_COUNT = {mm_count};\n_Alignas(32) const uint16_t MM_INDICES[81][{aligned_count}] = {{\n{concat}\n}};"
+    return total
+
+
 if __name__ == "__main__":
+    print(gen_headers())
+    print()
     print(gen_code())
+    print()
+    print(gen_mask_code())
     

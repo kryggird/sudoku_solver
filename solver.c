@@ -12,6 +12,7 @@
 
 #include "bitset.h"
 #include "tables.c"
+#include "simd.h"
 
 #ifndef DEBUG_VERIFY
     #define DEBUG_VERIFY 0
@@ -21,7 +22,10 @@ const char* TEST_PROBLEM = "0043002090050090010700600430060020871900074000500830
 const char* TEST_SOLUTION = "864371259325849761971265843436192587198657432257483916689734125713528694542916378";
 
 typedef struct Board {
-    uint16_t flags[81];    
+    union {
+        uint16_t flags[81];    
+        __m256i mm_flags[6];
+    };
 } Board;
 
 typedef struct Solution {
@@ -141,6 +145,44 @@ void mark_false_no_recurse(Board* board, int true_cell_idx, uint16_t mask) {
     }
 }
 
+// mask is the *true* mask. Aka `1 << val`.
+Bitset mark_false_no_recurse_m256(Board* board, int true_cell_idx, uint16_t mask) {
+    __m256i MM_ZERO = _mm256_set1_epi16(0);
+    __m256i* mm_board_ptr = (__m256i*) &(board->mm_flags);
+    __m256i* mm_cell_masks_ptr = (__m256i*) &(MM_INDICES[true_cell_idx]);
+    __m256i flag_mask = _mm256_set1_epi16(mask);
+
+    Bitset bitset;
+    bitset.data[0] = 0; bitset.data[1] = 0;
+    for (int shift_idx = 0; shift_idx < MM_COUNT; ++shift_idx) {
+        __m256i mm_flags = _mm256_load_si256(mm_board_ptr + shift_idx);
+        __m256i mm_cells = _mm256_load_si256(mm_cell_masks_ptr + shift_idx);
+        __m256i masked_cells = _mm256_and_si256(mm_cells, flag_mask);
+
+        __m256i output = _mm256_andnot_si256(masked_cells, mm_flags);
+        __m256i is_set = _mm256_cmpgt_epi16(
+            _mm256_and_si256(masked_cells, mm_flags), MM_ZERO
+        );
+        __m256i mm_recurse = _mm256_and_si256(
+            is_set, exactly_one_m256(output)
+        );
+
+        int recurse_set = movemask_epi16(mm_recurse);
+
+        while (recurse_set) {
+            int flag_idx = __tzcnt_u32(recurse_set);
+            xor_bit(&bitset, flag_idx + shift_idx * 16);
+            recurse_set ^= 1 << flag_idx;
+        }
+        
+        // Store
+        _mm256_store_si256(mm_board_ptr + shift_idx, output);
+    }
+
+    return bitset;
+}
+
+
 
 // mask is the *true* mask. Aka `1 << val`.
 void mark_false(Board* board, int idx, uint16_t mask) {
@@ -157,8 +199,7 @@ void mark_false(Board* board, int idx, uint16_t mask) {
 void mark_true(Board* board, int idx, uint16_t mask) {
     board->flags[idx] &= mask;
 
-    Bitset recurse_set = find_recurse_set(board, idx, mask);
-    mark_false_no_recurse(board, idx, mask);
+    Bitset recurse_set = mark_false_no_recurse_m256(board, idx, mask);
 
     while (test_all(&recurse_set)) {
         int flag_idx = tzcnt(&recurse_set);
