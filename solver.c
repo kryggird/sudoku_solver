@@ -10,6 +10,7 @@
 
 #include <x86intrin.h> // tzcnt, popcnt
 
+#include "bitset.h"
 #include "tables.c"
 
 #ifndef DEBUG_VERIFY
@@ -135,23 +136,21 @@ void mark_false(Board* board, int idx, uint16_t mask) {
 }
 
 void mark_true(Board* board, int idx, uint16_t mask) {
-    //uint16_t mask = 1 << val;
     board->flags[idx] &= mask;
 
-    /*for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
-        mark_false(board, INDICES[idx][shift_idx], mask);
-    }*/
+    Bitset recurse_set;
+    recurse_set.data[0] = 0ul; recurse_set.data[1] = 0ul;
 
-    uint32_t recurse_set = 0;
     for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
         int bit = mark_false_no_recurse(board, INDICES[idx][shift_idx], mask);
-        recurse_set |= bit << shift_idx;
+        if (bit) {
+            xor_bit(&recurse_set, INDICES[idx][shift_idx]);
+        }
     }
 
-    while (recurse_set) {
-        int shift_idx = __tzcnt_u32(recurse_set);
-        int flag_idx = INDICES[idx][shift_idx];
-        recurse_set ^= 1 << shift_idx;
+    while (test_all(&recurse_set)) {
+        int flag_idx = tzcnt(&recurse_set);
+        xor_bit(&recurse_set, flag_idx);
         mark_true(board, flag_idx, board->flags[flag_idx]);
     }
 }
