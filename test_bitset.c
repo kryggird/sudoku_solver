@@ -40,6 +40,27 @@ void test_xor_tzcnt_exhaust(int set_count) {
     }
 }
 
+void test_setmask_tzcnt_roundtrip() {
+    for (int idx = 0; idx < 128; ++idx) {
+        Bitset bitset;
+        bitset.data[0] = 0ul; bitset.data[1] = 0ul;
+
+        int shift = idx / 16;
+        uint16_t mask = ((uint16_t) 1) << ((uint16_t) idx % (uint16_t) 16);
+        set_aligned_mask(&bitset, mask, shift);
+        int tzcnt_idx = tzcnt(&bitset);
+
+        if (idx != tzcnt_idx) {
+            printf("idx: %d shift: %d mask %.04X tzcnt: %d\n", idx, shift, (uint32_t) mask, tzcnt_idx);
+            print_bitset(&bitset);
+            exit(1);
+        }
+    }
+}
+
 int main() {
     test_xor_tzcnt_roundtrip();
+    test_xor_tzcnt_exhaust(81);
+    test_xor_tzcnt_exhaust(128);
+    test_setmask_tzcnt_roundtrip();
 }

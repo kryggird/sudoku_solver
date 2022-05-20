@@ -169,11 +169,7 @@ Bitset mark_false_no_recurse_m256(Board* board, int true_cell_idx, uint16_t mask
 
         int recurse_set = movemask_epi16(mm_recurse);
 
-        while (recurse_set) {
-            int flag_idx = __tzcnt_u32(recurse_set);
-            xor_bit(&bitset, flag_idx + shift_idx * 16);
-            recurse_set ^= 1 << flag_idx;
-        }
+        set_aligned_mask(&bitset, (uint16_t) recurse_set, shift_idx);
         
         // Store
         _mm256_store_si256(mm_board_ptr + shift_idx, output);

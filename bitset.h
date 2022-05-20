@@ -15,7 +15,7 @@ int tzcnt(Bitset* bitset) {
 }
 
 void set_aligned_mask(Bitset* bitset, uint16_t mask, uint64_t shift) {
-    int idx = shift >= 4;
+    int idx = shift < 4;
     bitset->data[idx] |= ((uint64_t) mask) << ((shift % 4ul) * 16ul);
 }
 
