@@ -115,13 +115,32 @@ void mark_false(Board* board, int idx, uint16_t val);
 void mark_true(Board* board, int idx, uint16_t val);
 
 // mask is the *true* mask. Aka `1 << val`.
-// mask is the *true* mask. Aka `1 << val`.
-int mark_false_no_recurse(Board* board, int idx, uint16_t mask) {
-    int is_set = board->flags[idx] & mask;
-    board->flags[idx] &= ~mask;
+Bitset find_recurse_set(Board* board, int true_cell_idx, uint16_t mask) {
+    Bitset recurse_set;
+    recurse_set.data[0] = 0ul; recurse_set.data[1] = 0ul;
 
-    return (is_set > 0) & exactly_one(board->flags[idx]);
+    for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
+        int idx = INDICES[true_cell_idx][shift_idx];
+        int is_set = board->flags[idx] & mask;
+        int flag_andnot_mask = board->flags[idx] & ~mask;
+
+        int bit = (is_set > 0) & exactly_one(flag_andnot_mask);
+        if (bit) {
+            xor_bit(&recurse_set, idx);
+        }
+    }
+
+    return recurse_set;
 }
+
+// mask is the *true* mask. Aka `1 << val`.
+void mark_false_no_recurse(Board* board, int true_cell_idx, uint16_t mask) {
+    for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
+        int idx = INDICES[true_cell_idx][shift_idx];
+        board->flags[idx] = board->flags[idx] & ~mask;
+    }
+}
+
 
 // mask is the *true* mask. Aka `1 << val`.
 void mark_false(Board* board, int idx, uint16_t mask) {
@@ -138,15 +157,8 @@ void mark_false(Board* board, int idx, uint16_t mask) {
 void mark_true(Board* board, int idx, uint16_t mask) {
     board->flags[idx] &= mask;
 
-    Bitset recurse_set;
-    recurse_set.data[0] = 0ul; recurse_set.data[1] = 0ul;
-
-    for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
-        int bit = mark_false_no_recurse(board, INDICES[idx][shift_idx], mask);
-        if (bit) {
-            xor_bit(&recurse_set, INDICES[idx][shift_idx]);
-        }
-    }
+    Bitset recurse_set = find_recurse_set(board, idx, mask);
+    mark_false_no_recurse(board, idx, mask);
 
     while (test_all(&recurse_set)) {
         int flag_idx = tzcnt(&recurse_set);
