@@ -26,7 +26,7 @@ void test_xor_tzcnt_exhaust(int set_count) {
 
     uint8_t seen[128] = {0};
 
-    while (test_all(&bitset)) {
+    while (test_all(bitset)) {
         int tzcnt_idx = tzcnt(&bitset);
         xor_bit(&bitset, tzcnt_idx);
 

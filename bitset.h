@@ -28,8 +28,14 @@ void xor_bit(Bitset* bitset, uint64_t n) {
     bitset->data[idx] ^= 1ul << shift;
 }
 
-uint64_t test_all(Bitset* bitset) {
-    return bitset->data[0] | bitset->data[1];
+Bitset or_all(Bitset lhs, Bitset rhs) {
+    return (Bitset) {
+        .data = {lhs.data[0] | rhs.data[0], lhs.data[1] | rhs.data[1] }
+    };
+}
+
+uint64_t test_all(Bitset bitset) {
+    return bitset.data[0] | bitset.data[1];
 }
 
 void print_bitset(Bitset* bitset) {

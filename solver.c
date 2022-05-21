@@ -200,10 +200,14 @@ void mark_true(Board* board, int idx, uint16_t mask) {
 
     Bitset recurse_set = mark_false_no_recurse_m256(board, idx, mask);
 
-    while (test_all(&recurse_set)) {
+    while (test_all(recurse_set)) {
         int flag_idx = tzcnt(&recurse_set);
+        uint16_t new_mask = board->flags[flag_idx];
+
         xor_bit(&recurse_set, flag_idx);
-        mark_true(board, flag_idx, board->flags[flag_idx]);
+
+        Bitset new_bitset = mark_false_no_recurse_m256(board, flag_idx, new_mask);
+        recurse_set = or_all(recurse_set, new_bitset);
     }
 }
 
