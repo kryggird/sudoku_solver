@@ -23,7 +23,7 @@ const char* TEST_SOLUTION = "864371259325849761971265843436192587198657432257483
 
 typedef struct Board {
     union {
-        uint16_t flags[81];    
+        uint16_t flags[96];
         __m256i mm_flags[6];
     };
 } Board;
@@ -90,7 +90,10 @@ int stack_nonempty(Stack* stack) {
 Board make_empty_board() {
     Board board;
     for (int idx = 0; idx < 81; ++idx) {
-        board.flags[idx] = 0b111111111;
+        board.flags[idx] = 0b0111111111;
+    }
+    for (int idx = 81; idx < 96; ++idx) {
+        board.flags[idx] = 0b1000000000;
     }
     return board;
 }
@@ -206,10 +209,23 @@ void mark_true(Board* board, int idx, uint16_t mask) {
 
 int verify(Board* board) {
     int accumulator = 1;
-    for (int idx = 0; idx < 81; ++idx) {
+    for (int idx = 0; idx < 96; ++idx) {
         accumulator &= (board->flags[idx] != 0);
     }
     return accumulator;
+}
+
+int verify_m256(Board* board) {
+    __m256i MM_ZERO = _mm256_set1_epi16(0);
+    __m256i accum = _mm256_set1_epi16(-1);
+    __m256i* mm_board_ptr = (__m256i*) &(board->mm_flags);
+
+    for (int idx = 0; idx < MM_COUNT; ++idx) {
+        __m256i mm_flags = _mm256_load_si256(mm_board_ptr + idx);
+        accum = _mm256_and_si256(accum, _mm256_cmpgt_epi16(mm_flags, MM_ZERO));
+    }
+
+    return _mm256_movemask_epi8(accum) == 0xFFFFFFFF;
 }
 
 void debug_verify(Board* board) {
@@ -268,10 +284,22 @@ void debug_verify(Board* board) {
 
 int is_solution(Board* board) {
     int ret = 1;
-    for (int idx = 0; idx < 81; ++idx) {
+    for (int idx = 0; idx < 96; ++idx) {
         ret &= exactly_one(board->flags[idx]);
     }
     return ret;
+}
+
+int is_solution_m256(Board* board) {
+    __m256i accum = _mm256_set1_epi16(-1);
+    __m256i* mm_board_ptr = (__m256i*) &(board->mm_flags);
+
+    for (int idx = 0; idx < MM_COUNT; ++idx) {
+        __m256i mm_flags = _mm256_load_si256(mm_board_ptr + idx);
+        accum = _mm256_and_si256(accum, exactly_one_m256(mm_flags));
+    }
+
+    return _mm256_movemask_epi8(accum) == 0xFFFFFFFF;
 }
 
 void print_board(Board board) {
@@ -347,12 +375,12 @@ Solution solve_from_candidates(Stack* stack_ptr) {
 
             int idx = state.idxs[count];
 
-            if (!verify(&state.current)) {
+            if (!verify_m256(&state.current)) {
                 //printf("Verify failed!\n");
                 break;
             } else if (exactly_one(state.current.flags[idx])) {
                 //printf("Nothing to do here!\n");
-                if (is_solution(&state.current)) {
+                if (is_solution_m256(&state.current)) {
                     solution.solution = state.current;
                     solution.is_solved = 1;
                     return solution;
@@ -371,7 +399,7 @@ Solution solve_from_candidates(Stack* stack_ptr) {
             }
         }
 
-        if (is_solution(&state.current)) {
+        if (is_solution_m256(&state.current)) {
             solution.solution = state.current;
             solution.is_solved = 1;
             return solution;
