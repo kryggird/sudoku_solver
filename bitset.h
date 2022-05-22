@@ -4,7 +4,10 @@
 #include <x86intrin.h> // tzcnt
 
 typedef struct {
-    uint64_t data[2];
+    _Alignas(16) union {
+        uint64_t data[2];
+        __m128i mm_data;
+    };
 } Bitset;
 
 int tzcnt(Bitset* bitset) {
@@ -28,14 +31,27 @@ void xor_bit(Bitset* bitset, uint64_t n) {
     bitset->data[idx] ^= 1ul << shift;
 }
 
+void xor_bit_m128(Bitset* bitset, uint64_t n) {
+    int idx = n < 64ul;
+    uint64_t shift = idx ? n - 64ul : n;
+    uint64_t data = 1ul << shift;
+    if (idx) {
+        bitset->mm_data = _mm_insert_epi64(bitset->mm_data, data, 1);
+    } else {
+        bitset->mm_data = _mm_insert_epi64(bitset->mm_data, data, 0);
+    }
+}
+
 Bitset or_all(Bitset lhs, Bitset rhs) {
     return (Bitset) {
-        .data = {lhs.data[0] | rhs.data[0], lhs.data[1] | rhs.data[1] }
+        //.data = {lhs.data[0] | rhs.data[0], lhs.data[1] | rhs.data[1] }
+        .mm_data = _mm_or_si128(lhs.mm_data, rhs.mm_data)
     };
 }
 
 uint64_t test_all(Bitset bitset) {
     return bitset.data[0] | bitset.data[1];
+    //return !_mm_test_all_zeros(bitset.mm_data, _mm_set1_epi32(0));
 }
 
 void print_bitset(Bitset* bitset) {

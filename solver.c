@@ -22,7 +22,7 @@ const char* TEST_PROBLEM = "0043002090050090010700600430060020871900074000500830
 const char* TEST_SOLUTION = "864371259325849761971265843436192587198657432257483916689734125713528694542916378";
 
 typedef struct Board {
-    union {
+    _Alignas(32) union {
         uint16_t flags[96];
         __m256i mm_flags[6];
     };
@@ -204,7 +204,7 @@ void mark_true(Board* board, int idx, uint16_t mask) {
         int flag_idx = tzcnt(&recurse_set);
         uint16_t new_mask = board->flags[flag_idx];
 
-        xor_bit(&recurse_set, flag_idx);
+        xor_bit_m128(&recurse_set, flag_idx);
 
         Bitset new_bitset = mark_false_no_recurse_m256(board, flag_idx, new_mask);
         recurse_set = or_all(recurse_set, new_bitset);
