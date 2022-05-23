@@ -6,7 +6,6 @@
 #include <stdint.h> // uint*_t
 #include <stdio.h> // printf
 #include <stdlib.h> // calloc
-#include <string.h> // strcmp
 
 #include <x86intrin.h> // tzcnt, popcnt
 
@@ -35,8 +34,7 @@ typedef struct Solution {
 
 typedef struct State {
     Board current;
-    int8_t idxs[81];
-    int idx;
+    Bitset to_visit;
 } State;
 
 typedef struct Stack {
@@ -101,10 +99,11 @@ Board make_empty_board() {
 State make_empty_state() {
     State state;
     state.current = make_empty_board();
-    for (int8_t idx = 0; idx < 81; ++idx) {
-        state.idxs[idx] = idx;
+    state.to_visit = make_empty_bitset();
+
+    for (uint64_t idx = 0; idx < 81; ++idx) {
+        xor_bit(&state.to_visit, idx);
     }
-    state.idx = 0;
     return state;
 }
 
@@ -123,8 +122,7 @@ void mark_true(Board* board, int idx, uint16_t val);
 
 // mask is the *true* mask. Aka `1 << val`.
 Bitset find_recurse_set(Board* board, int true_cell_idx, uint16_t mask) {
-    Bitset recurse_set;
-    recurse_set.data[0] = 0ul; recurse_set.data[1] = 0ul;
+    Bitset recurse_set = make_empty_bitset();
 
     for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
         int idx = INDICES[true_cell_idx][shift_idx];
@@ -155,8 +153,8 @@ Bitset mark_false_no_recurse_m256(Board* board, int true_cell_idx, uint16_t mask
     __m256i* mm_cell_masks_ptr = (__m256i*) &(MM_INDICES[true_cell_idx]);
     __m256i flag_mask = _mm256_set1_epi16(mask);
 
-    Bitset bitset;
-    bitset.data[0] = 0; bitset.data[1] = 0;
+    Bitset bitset = make_empty_bitset();
+    
     for (int shift_idx = 0; shift_idx < MM_COUNT; ++shift_idx) {
         __m256i mm_flags = _mm256_load_si256(mm_board_ptr + shift_idx);
         __m256i mm_cells = _mm256_load_si256(mm_cell_masks_ptr + shift_idx);
@@ -353,6 +351,27 @@ void print_flags(const Board* board) {
     printf("\n");
 }
 
+int find_idx(State* state) {
+    Bitset candidates = state->to_visit;
+    int argmin = tzcnt(&candidates);
+    int min = _mm_popcnt_u32(state->current.flags[argmin]);
+    xor_bit(&candidates, argmin);
+
+    while (min > 2 && test_all(candidates)) {
+        int idx = tzcnt(&candidates);
+        if (idx >= 81) {
+            break;
+        }
+        int popcnt = _mm_popcnt_u32(state->current.flags[idx]);
+        xor_bit(&candidates, idx);
+
+        argmin = (popcnt < min) ? idx : argmin;
+        min = (popcnt < min) ? popcnt : min;
+    }
+
+    return argmin;
+}
+
 Solution solve_from_candidates(Stack* stack_ptr) {
     Solution solution = (Solution) {make_empty_board(), 0};
 
@@ -360,24 +379,23 @@ Solution solve_from_candidates(Stack* stack_ptr) {
         State state = stack_pop(stack_ptr);
         //printf("Stack popped!\n");
 
-        for(int count = state.idx; count < 81; ++count) {
-            int argmin = count;
-            int min = _mm_popcnt_u32(state.current.flags[state.idxs[argmin]]);
-            for (int swap_idx = count; (min > 2) & (swap_idx < 81); ++swap_idx) {
-                int candidate = _mm_popcnt_u32(state.current.flags[state.idxs[swap_idx]]);
-                argmin = (candidate < min) ? swap_idx : argmin;
-                min = (candidate < min) ? candidate : min;
-            }
-            // Swap values
-            int8_t tmp = state.idxs[count];
-            state.idxs[count] = state.idxs[argmin];
-            state.idxs[argmin] = tmp;
+        /* int seen[81] = {0}; */
+        /* int depth = 0; */
 
-            //print_flags(&state.current);
+        while (test_all(state.to_visit)) {
+            int idx = find_idx(&state);
 
-            //debug_verify(&state.current);
-
-            int idx = state.idxs[count];
+            /* ++depth; */
+            /* ++seen[idx]; */
+            /* if (depth > 100) { */
+            /*     exit(99); */
+            /* } else if (idx >= 81) { */
+            /*     printf("idx: %d flags: %X\n", idx, state.current.flags[idx]); */
+            /*     print_bitset(&state.to_visit); */
+            /*     exit(100); */
+            /* } else if (seen[idx] >= 2) {  */
+            /*     exit(101);  */
+            /* } */
 
             if (!verify_m256(&state.current)) {
                 //printf("Verify failed!\n");
@@ -389,6 +407,7 @@ Solution solve_from_candidates(Stack* stack_ptr) {
                     solution.is_solved = 1;
                     return solution;
                 } else {
+                    xor_bit(&state.to_visit, idx);
                     continue;
                 }
             } else {
@@ -400,6 +419,7 @@ Solution solve_from_candidates(Stack* stack_ptr) {
                 stack_push(stack_ptr, next);
 
                 mark_true(&state.current, idx, val_to_mask(val));
+                xor_bit(&state.to_visit, idx);
             }
         }
 
@@ -423,6 +443,7 @@ Solution solve_one(const char* problem) {
             int val = problem[idx] - '1';
             
             mark_true(&state.current, idx, val_to_mask(val));
+            xor_bit(&state.to_visit, idx);
         }
     }
 

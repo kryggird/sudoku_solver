@@ -7,6 +7,10 @@ typedef struct {
     uint64_t data[2];
 } Bitset;
 
+Bitset make_empty_bitset() {
+    return (Bitset) { .data = {0ul, 0ul} };
+}
+
 int tzcnt(Bitset* bitset) {
     int hi = __tzcnt_u64(bitset->data[0]) + 64;
     int lo = __tzcnt_u64(bitset->data[1]);
