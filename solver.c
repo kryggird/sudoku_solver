@@ -357,13 +357,22 @@ int find_idx(State* state) {
     int min = _mm_popcnt_u32(state->current.flags[argmin]);
     xor_bit(&candidates, argmin);
 
-    while (min > 2 && test_all(candidates)) {
-        int idx = tzcnt(&candidates);
-        if (idx >= 81) {
-            break;
+    while (min > 2 && candidates.data[1]) {
+        int idx = __tzcnt_u64(candidates.data[1]);
+        int popcnt = _mm_popcnt_u32(state->current.flags[idx]);
+        candidates.data[1] ^= 1ul << idx;
+
+        argmin = (popcnt < min) ? idx : argmin;
+        min = (popcnt < min) ? popcnt : min;
+    }
+    
+    while (min > 2 && candidates.data[0]) {
+        int idx = __tzcnt_u64(candidates.data[0]) + 64;
+        if (idx >= 81) { 
+            break; 
         }
         int popcnt = _mm_popcnt_u32(state->current.flags[idx]);
-        xor_bit(&candidates, idx);
+        candidates.data[0] ^= 1ul << (idx - 64);
 
         argmin = (popcnt < min) ? idx : argmin;
         min = (popcnt < min) ? popcnt : min;
