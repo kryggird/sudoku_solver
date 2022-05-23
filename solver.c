@@ -6,6 +6,7 @@
 #include <stdint.h> // uint*_t
 #include <stdio.h> // printf
 #include <stdlib.h> // calloc
+#include <string.h> // strcmp
 
 #include <x86intrin.h> // tzcnt
 
@@ -380,11 +381,10 @@ void solve_from_csv(const char* filename, int has_solution) {
     free(buffer);
 }
 
-int main() {
-    solve_from_csv("sudoku.csv", 1 /* has_solution */);
-    solve_from_csv("top1465.csv", 0 /* has_solution */);
-    solve_from_csv("data/puzzles0_kaggle", 0 /* has_solution */);
-    //solve_from_csv("data/puzzles5_forum_hardest_1905_11+", 0 /* has_solution */);
+int main(int argc, char *argv[]) {
+    for (int idx = 1; idx < argc; ++idx) {
+        solve_from_csv(argv[idx], 0);
+    }
 
     /*
     Solution candidate = solve_one(TEST_PROBLEM);
