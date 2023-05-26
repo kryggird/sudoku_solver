@@ -3,6 +3,8 @@
 
 #include <x86intrin.h> // tzcnt
 
+#define ASSUME(cond) do { if (!(cond)) __builtin_unreachable(); } while (0)
+
 typedef struct {
     uint64_t data[2];
 } Bitset;
@@ -15,11 +17,15 @@ int tzcnt(Bitset* bitset) {
 }
 
 void set_aligned_mask(Bitset* bitset, uint16_t mask, uint64_t shift) {
+    ASSUME(shift < 8);
+
     int idx = shift < 4;
     bitset->data[idx] |= ((uint64_t) mask) << ((shift % 4ul) * 16ul);
 }
 
 void xor_bit(Bitset* bitset, uint64_t n) {
+    ASSUME(n < 128);
+
     int idx = n < 64ul;
     uint64_t shift = idx ? n : n - 64ul;
     if (shift > 64ul) {
