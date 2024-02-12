@@ -23,9 +23,10 @@ const char* TEST_SOLUTION = "864371259325849761971265843436192587198657432257483
 
 typedef struct Board {
     union {
-        uint16_t flags[96];
-        __m256i mm_flags[6];
+        uint8_t flags[96];
+        __m256i mm_flags[3];
     };
+    uint64_t flags9[2];
 } Board;
 
 typedef struct Solution {
@@ -89,13 +90,33 @@ int stack_nonempty(Stack* stack) {
 
 Board make_empty_board() {
     Board board;
+
+    board.flags9[0] = 0ul;
+    board.flags9[1] = 0ul;
+
     for (int idx = 0; idx < 81; ++idx) {
-        board.flags[idx] = 0b0111111111;
+        board.flags[idx] = -1;
     }
     for (int idx = 81; idx < 96; ++idx) {
-        board.flags[idx] = 0b1000000000;
+        board.flags[idx] = 0;
     }
     return board;
+}
+
+void xor_flag(Board* board, uint64_t idx, uint64_t val) {
+    if (val > 8ul) {
+        board->flags9[idx > 64ul ? 1ul : 0ul] ^= 1ul << (idx % 64ul);
+    } else {
+        board->flags[idx] ^= (1ul << val);
+    }
+}
+
+uint32_t popcnt_flag(Board* board, uint64_t idx) {
+    uint64_t reg = board->flags9[idx > 64ul ? 1ul : 0ul];
+    uint32_t bit = (reg & (1ul << idx)) > 0ul;
+    uint32_t popcnt_8 = _mm_popcnt_u32(board->flags[idx]);
+
+    return popcnt_8 + bit;
 }
 
 State make_empty_state() {
@@ -112,7 +133,7 @@ Board make_solution_board(const char* solution) {
     Board board;
     for (int idx = 0; idx < 81; ++idx) {
         int val = solution[idx] - '1';
-        board.flags[idx] = 1 << val;
+        xor_flag(&board, idx, val);
     }
     return board;
 }
@@ -120,33 +141,6 @@ Board make_solution_board(const char* solution) {
 
 void mark_false(Board* board, int idx, uint16_t val);
 void mark_true(Board* board, int idx, uint16_t val);
-
-// mask is the *true* mask. Aka `1 << val`.
-Bitset find_recurse_set(Board* board, int true_cell_idx, uint16_t mask) {
-    Bitset recurse_set;
-    recurse_set.data[0] = 0ul; recurse_set.data[1] = 0ul;
-
-    for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
-        int idx = INDICES[true_cell_idx][shift_idx];
-        int is_set = board->flags[idx] & mask;
-        int flag_andnot_mask = board->flags[idx] & ~mask;
-
-        int bit = (is_set > 0) & exactly_one(flag_andnot_mask);
-        if (bit) {
-            xor_bit(&recurse_set, idx);
-        }
-    }
-
-    return recurse_set;
-}
-
-// mask is the *true* mask. Aka `1 << val`.
-void mark_false_no_recurse(Board* board, int true_cell_idx, uint16_t mask) {
-    for (int shift_idx = 0; shift_idx < COUNT; ++shift_idx) {
-        int idx = INDICES[true_cell_idx][shift_idx];
-        board->flags[idx] = board->flags[idx] & ~mask;
-    }
-}
 
 // mask is the *true* mask. Aka `1 << val`.
 Bitset mark_false_no_recurse_m256(Board* board, int true_cell_idx, uint16_t mask) {
@@ -180,8 +174,6 @@ Bitset mark_false_no_recurse_m256(Board* board, int true_cell_idx, uint16_t mask
 
     return bitset;
 }
-
-
 
 // mask is the *true* mask. Aka `1 << val`.
 void mark_false(Board* board, int idx, uint16_t mask) {
@@ -286,14 +278,6 @@ void debug_verify(Board* board) {
     }
 }
 
-int is_solution(Board* board) {
-    int ret = 1;
-    for (int idx = 0; idx < 96; ++idx) {
-        ret &= exactly_one(board->flags[idx]);
-    }
-    return ret;
-}
-
 int is_solution_m256(Board* board) {
     __m256i accum = _mm256_set1_epi16(-1);
     __m256i* mm_board_ptr = (__m256i*) &(board->mm_flags);
@@ -306,59 +290,11 @@ int is_solution_m256(Board* board) {
     return _mm256_movemask_epi8(accum) == 0xFFFFFFFF;
 }
 
-void print_board(Board board) {
-    const char* digits = "123456789";
-
-    for (int row = 0; row < 9; ++row) {
-        for (int col = 0; col < 9; ++col) {
-            int idx = row * 9 + col;
-            int val = __tzcnt_u32(board.flags[idx]);
-
-            if (exactly_one(board.flags[idx]) && val >= 0 && val < 9) {
-                printf("%c", digits[val]);
-            } else {
-                printf(".");
-            }
-        }
-        printf("\n");
-    }
-}
-
-void print_solution(Solution solution) {
-    const char* digits = "123456789";
-    if (solution.is_solved) {
-        for (int idx = 0; idx < 81; ++idx) {
-            int val = __tzcnt_u32(solution.solution.flags[idx]);
-            if (val >= 9 || __builtin_popcount(solution.solution.flags[idx]) != 1) { exit(2); }
-            printf("%c", digits[val]);
-        }
-    } else {
-        printf("Unsolved!");
-    }
-    printf("\n");
-}
-
-void print_flags(const Board* board) {
-    for (int row = 0; row < 9; ++row) {
-        for(int col = 0; col < 9; ++col) {
-            int idx = row * 9 + col;
-            for (int val = 0; val < 9; ++val) {
-                char c = ((board->flags[idx] >> val) & 1) ? '.' : ('0' + val);
-                printf("%c", c);
-            }
-            printf(" ");
-        }
-        printf("\n");
-    }
-    printf("\n");
-}
-
 Solution solve_from_candidates(Stack* stack_ptr) {
     Solution solution = (Solution) {make_empty_board(), 0};
 
     while(stack_nonempty(stack_ptr)) {
         State state = stack_pop(stack_ptr);
-        //printf("Stack popped!\n");
 
         for(int count = state.idx; count < 81; ++count) {
             int argmin = count;
@@ -373,17 +309,11 @@ Solution solve_from_candidates(Stack* stack_ptr) {
             state.idxs[count] = state.idxs[argmin];
             state.idxs[argmin] = tmp;
 
-            //print_flags(&state.current);
-
-            //debug_verify(&state.current);
-
             int idx = state.idxs[count];
 
             if (!verify_m256(&state.current)) {
-                //printf("Verify failed!\n");
                 break;
             } else if (exactly_one(state.current.flags[idx])) {
-                //printf("Nothing to do here!\n");
                 if (is_solution_m256(&state.current)) {
                     solution.solution = state.current;
                     solution.is_solved = 1;
@@ -392,7 +322,6 @@ Solution solve_from_candidates(Stack* stack_ptr) {
                     continue;
                 }
             } else {
-                //printf("Adding new branch!\n");
                 State next = state;
                 int val = __tzcnt_u32(state.current.flags[idx]);
 
@@ -508,35 +437,4 @@ int main(int argc, char *argv[]) {
     for (int idx = 1; idx < argc; ++idx) {
         solve_from_csv(argv[idx], 0);
     }
-
-    /*
-    Solution candidate = solve_one(TEST_PROBLEM);
-    Board solution = make_solution_board(TEST_SOLUTION);
-
-    int accumulator = 1;
-    for (int idx = 0; idx < 81; ++idx) {
-        accumulator &= candidate.solution.flags[idx] == solution.flags[idx];
-        if(candidate.solution.flags[idx] != solution.flags[idx]) {
-            printf("Different %d\n", idx);
-        }
-    }
-    if (accumulator) {
-        printf("Solved!\n");
-    }
-    */
-    
-    /*
-    Board board = make_empty_board();
-    printf("flag: %d, count: %d\n", board.flags[0], (int) board.counts[0]);
-
-    mark_true(&board, 0, 1, '1' - '1');
-    mark_true(&board, 1, 0, '2' - '1');
-
-    printf("flag: %d, count: %d\n", board.flags[0], (int) board.counts[0]);
-    printf("%3d %3d %3d %3d\n%3d %3d %3d %3d\n%3d %3d %3d %3d\n",
-            board.flags[0], board.flags[1], board.flags[2], board.flags[3],
-            board.flags[9], board.flags[10], board.flags[11], board.flags[12],
-            board.flags[18], board.flags[18], board.flags[20], board.flags[21]
-          );
-    */
 }
