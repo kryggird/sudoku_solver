@@ -13,7 +13,6 @@ REPO_PATH = os.path.dirname(__file__)
 REPO_NAME = os.path.basename(REPO_PATH)
 DATA_FILES = list(
     map(partial(os.path.join, REPO_PATH), 
-        #["data/puzzles0_kaggle", "data/puzzles3_magictour_top1465", "data/puzzles5_forum_hardest_1905_11+"]
         ['data/puzzles6_forum_hardest_1106']
     )
 )

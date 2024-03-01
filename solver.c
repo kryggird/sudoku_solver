@@ -432,10 +432,6 @@ Solution solve_one(const char* problem) {
     Solution solution = solve_from_candidates(&stack);
     free(stack.data);
 
-    //printf("%s\n", solution.is_solved ? "Solved!" : "Unsolved!");
-    //print_solution(solution);
-    //printf("%s\n", TEST_SOLUTION);
-
     return solution;
 }
 
@@ -508,35 +504,4 @@ int main(int argc, char *argv[]) {
     for (int idx = 1; idx < argc; ++idx) {
         solve_from_csv(argv[idx], 0);
     }
-
-    /*
-    Solution candidate = solve_one(TEST_PROBLEM);
-    Board solution = make_solution_board(TEST_SOLUTION);
-
-    int accumulator = 1;
-    for (int idx = 0; idx < 81; ++idx) {
-        accumulator &= candidate.solution.flags[idx] == solution.flags[idx];
-        if(candidate.solution.flags[idx] != solution.flags[idx]) {
-            printf("Different %d\n", idx);
-        }
-    }
-    if (accumulator) {
-        printf("Solved!\n");
-    }
-    */
-    
-    /*
-    Board board = make_empty_board();
-    printf("flag: %d, count: %d\n", board.flags[0], (int) board.counts[0]);
-
-    mark_true(&board, 0, 1, '1' - '1');
-    mark_true(&board, 1, 0, '2' - '1');
-
-    printf("flag: %d, count: %d\n", board.flags[0], (int) board.counts[0]);
-    printf("%3d %3d %3d %3d\n%3d %3d %3d %3d\n%3d %3d %3d %3d\n",
-            board.flags[0], board.flags[1], board.flags[2], board.flags[3],
-            board.flags[9], board.flags[10], board.flags[11], board.flags[12],
-            board.flags[18], board.flags[18], board.flags[20], board.flags[21]
-          );
-    */
 }
